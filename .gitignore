@@ -1,0 +1,6 @@
+node_modules/
+outputs/
+*.log
+.DS_Store
+__pycache__/
+*.zip
