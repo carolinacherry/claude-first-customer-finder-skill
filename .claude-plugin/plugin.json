@@ -1,7 +1,7 @@
 {
   "name": "first-customer-finder",
   "description": "Find and qualify evidence-backed potential first customers, early adopters, and design partners for a startup from recent public signals. Research-only: never sends outreach.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Daniel An"
   },
