@@ -19,7 +19,7 @@ The script is stdlib-only Python 3.9+. Return the absolute output path as a clic
   "search_scope": "Public English-language sources, last 12 months",
   "generated_at": "2026-07-13",
   "mode": "standard",
-  "verdict": "One-paragraph answer: does this startup have reachable early-customer signals, and where do the strongest ones come from?",
+  "verdict": "One short paragraph that says where the strongest early-customer signals are and who leads the list. Do not open with yes or no; the page never shows a question.",
   "prospects": [
     {
       "name": "Example Gym",
