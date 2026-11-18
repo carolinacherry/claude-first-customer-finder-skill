@@ -18,12 +18,6 @@ SCORE_DIMENSIONS = {
     "evidence": "Evidence quality",
 }
 
-STAGE_CLASSES = {
-    "high": "stage-high",
-    "problem": "stage-warm",
-    "trigger": "stage-warm",
-}
-
 
 def esc(value: Any) -> str:
     return html.escape(str(value if value is not None else ""), quote=True)
@@ -55,14 +49,6 @@ def safe_url(value: Any) -> str:
     return "#"
 
 
-def stage_class(stage: Any) -> str:
-    value = str(stage or "").lower()
-    for needle, cls in STAGE_CLASSES.items():
-        if needle in value:
-            return cls
-    return "stage-cool"
-
-
 def score_band(score: int) -> str:
     if score >= 80:
         return "Strong candidate"
@@ -72,62 +58,155 @@ def score_band(score: int) -> str:
 
 
 def render_scores(scores: dict[str, Any]) -> str:
-    rows = []
-    for key, label in SCORE_DIMENSIONS.items():
-        value = clamp(scores.get(key, 0), 5)
-        rows.append(
-            f'<div class="dim"><span>{esc(label)}</span>'
-            f'<div class="bar"><i style="width:{value * 20}%"></i></div>'
-            f"<b>{value}/5</b></div>"
-        )
-    return "".join(rows)
+    return "".join(
+        f'<div><dt>{esc(label)}</dt><dd>{clamp(scores.get(key, 0), 5)} of 5</dd></div>'
+        for key, label in SCORE_DIMENSIONS.items()
+    )
 
 
 def render_prospect(prospect: dict[str, Any], index: int) -> str:
     score = clamp(prospect.get("score"))
     source = as_dict(prospect.get("source"))
     url = safe_url(source.get("url"))
+    rows = "".join(
+        f"<dt>{esc(label)}</dt><dd>{esc(value)}</dd>"
+        for label, value in (
+            ("Why it fits", prospect.get("why_fit")),
+            ("Why now", prospect.get("why_now")),
+            ("Channel", prospect.get("channel")),
+            ("Caution", prospect.get("caution") or "Confirm the signal is still current before outreach."),
+        )
+        if value
+    )
+    opener = prospect.get("opener")
+    opener_html = (
+        '      <div class="opener">\n'
+        '        <p class="label">Suggested opener, draft only and never sent automatically</p>\n'
+        f"        <p>{esc(opener)}</p>\n"
+        "      </div>"
+        if opener
+        else ""
+    )
+    evidence_html = f"""        <p>{esc(prospect.get('evidence', ''))}</p>
+        <p class="source">
+          {esc(source.get('type', 'Public source'))}, {esc(source.get('date', 'date unavailable'))}
+          <span aria-hidden="true">&middot;</span>
+          <a href="{url}" target="_blank" rel="noreferrer">{esc(source.get('title', 'Open original source'))}</a>
+        </p>
+        <dl class="dims">{render_scores(as_dict(prospect.get('scores')))}</dl>"""
     return f"""
-      <article class="prospect">
-        <header>
-          <span class="index">{index:02d}</span>
-          <div class="who">
-            <small>{esc(prospect.get('type', 'Public prospect'))}</small>
-            <h3>{esc(prospect.get('name', f'Prospect {index}'))}</h3>
-            <span class="stage {stage_class(prospect.get('stage'))}">{esc(prospect.get('stage', 'Potential fit'))}</span>
-          </div>
-          <div class="fit">
-            <strong>{score}</strong>
-            <div class="fit-bar"><i style="width:{score}%"></i></div>
-            <small>{esc(score_band(score))}</small>
-          </div>
-        </header>
-        <p class="signal">{esc(prospect.get('signal', ''))}</p>
-        <dl class="facts">
-          <div><dt>Why it fits</dt><dd>{esc(prospect.get('why_fit', ''))}</dd></div>
-          <div><dt>Why now</dt><dd>{esc(prospect.get('why_now', ''))}</dd></div>
-          <div><dt>Channel</dt><dd>{esc(prospect.get('channel', ''))}</dd></div>
-          <div><dt>Caution</dt><dd>{esc(prospect.get('caution', 'Confirm the signal is still current before outreach.'))}</dd></div>
-        </dl>
-        <div class="opener"><dt>Suggested opener (draft — never auto-sent)</dt><p>{esc(prospect.get('opener', ''))}</p></div>
-        <details>
-          <summary>Evidence &amp; score breakdown</summary>
-          <p>{esc(prospect.get('evidence', ''))}</p>
-          <p class="source">
-            {esc(source.get('type', 'Public source'))} · {esc(source.get('date', 'date unavailable'))} ·
-            <a href="{url}" target="_blank" rel="noreferrer">{esc(source.get('title', 'Open original source'))} ↗</a>
-          </p>
-          <div class="dims">{render_scores(as_dict(prospect.get('scores')))}</div>
-        </details>
-      </article>"""
+    <article class="prospect">
+      <header class="p-head">
+        <div>
+          <h3>{esc(prospect.get('name') or f'Prospect {index}')}</h3>
+          <p class="sub">{esc(prospect.get('type', 'Public prospect'))} <span aria-hidden="true">&middot;</span> {esc(prospect.get('stage', 'Potential fit'))}</p>
+        </div>
+        <div class="score"><b class="num">{score}</b><span>{esc(score_band(score))}</span></div>
+      </header>
+      {f'<p class="signal">{esc(prospect.get("signal"))}</p>' if prospect.get("signal") else ''}
+      <dl class="kv">{rows}</dl>
+{opener_html}
+      <details class="screen-only">
+        <summary>Evidence and score breakdown</summary>
+{evidence_html}
+      </details>
+      <div class="print-only">
+        <p class="label">Evidence and score breakdown</p>
+{evidence_html}
+      </div>
+    </article>"""
 
 
 def render_pattern(pattern: dict[str, Any]) -> str:
     return (
-        f'<article class="pattern"><strong>{clamp(pattern.get("count"), 999)}×</strong>'
-        f'<div><h3>{esc(pattern.get("title", "Repeated signal"))}</h3>'
-        f'<p>{esc(pattern.get("insight", ""))}</p></div></article>'
+        f'<div class="pattern"><b class="num">{clamp(pattern.get("count"), 999)}</b>'
+        f'<div><h4>{esc(pattern.get("title", "Repeated signal"))}</h4>'
+        f'<p>{esc(pattern.get("insight", ""))}</p></div></div>'
     )
+
+
+CSS = """
+:root{--bg:#f6f5f2;--sheet:#fff;--ink:#18181a;--ink2:#54545b;--ink3:#86868d;--line:#ecebe7;--tint:#f4f3ef;--accent:#2f5d50;--link-line:#cfcfca;
+  --shadow:0 1px 2px rgba(20,20,20,.04),0 12px 40px -12px rgba(20,20,20,.08);
+  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#121211;--sheet:#1a1a19;--ink:#ecebe7;--ink2:#a8a7a1;--ink3:#8a8983;--line:rgba(255,255,255,.07);--tint:#222220;--accent:#93b5a6;--link-line:#4a4a46;--shadow:0 1px 2px rgba(0,0,0,.3)}}
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--link-line);text-underline-offset:3px}
+a:hover{text-decoration-color:currentColor}
+.num{font-variant-numeric:tabular-nums}
+.sheet{max-width:880px;margin:40px auto 64px;background:var(--sheet);border-radius:28px;box-shadow:var(--shadow);padding:72px 80px 56px}
+.meta{color:var(--ink3);font-size:13px;margin:0}
+h1{font-weight:300;font-size:clamp(32px,5vw,46px);line-height:1.08;letter-spacing:-.035em;margin:18px 0 22px;max-width:15em}
+.verdict{font-size:18px;line-height:1.6;color:var(--ink2);max-width:36em;margin:0}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:48px 0 0;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.facts dt,.kv dt,.steps dt,.dims dt,.label,.eyebrow{color:var(--ink3);font-size:13px;font-weight:400}
+.facts dd{margin:4px 0 0;font-weight:500}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:32px;margin:56px 0 0}
+.top h2{font-weight:400;font-size:28px;line-height:1.2;letter-spacing:-.025em;margin:6px 0 8px}
+.top p{margin:0;color:var(--ink2);max-width:32em}
+.top .big{font-weight:300;font-size:64px;line-height:1;letter-spacing:-.05em;color:var(--accent)}
+section.block{margin-top:80px}
+.eyebrow{margin:0}
+h2.section{font-weight:400;font-size:26px;line-height:1.2;letter-spacing:-.025em;margin:8px 0 6px}
+.note{color:var(--ink3);font-size:14px;margin:0 0 12px;max-width:40em}
+.prospect{padding:36px 0;border-bottom:1px solid var(--line);break-inside:avoid;page-break-inside:avoid}
+.prospect:last-child{border-bottom:0}
+.p-head{display:flex;justify-content:space-between;gap:24px;align-items:baseline}
+.p-head h3{font-weight:500;font-size:20px;line-height:1.3;letter-spacing:-.02em;margin:0}
+.sub{color:var(--ink3);font-size:13px;margin:4px 0 0}
+.score{text-align:right;white-space:nowrap}
+.score b{font-weight:400;font-size:30px;line-height:1;letter-spacing:-.03em}
+.score span{display:block;color:var(--ink3);font-size:12px;margin-top:6px}
+.signal{font-size:17px;line-height:1.55;margin:18px 0 22px;max-width:38em}
+.kv:empty{display:none}.p-head+.kv{margin-top:18px}.kv{display:grid;grid-template-columns:120px 1fr;gap:10px 24px;margin:0}
+.kv dd{margin:0;color:var(--ink2);font-size:14px}
+.kv dt{font-size:14px}
+.opener{background:var(--tint);border-radius:16px;padding:18px 22px;margin:22px 0 0}
+.opener p{margin:6px 0 0}.opener .label{margin:0}
+details{margin-top:16px}
+summary{cursor:pointer;color:var(--ink2);font-size:14px;list-style:none;display:inline-block}
+summary::-webkit-details-marker{display:none}
+summary::after{content:" +";color:var(--ink3)}
+details[open] summary::after{content:" \\2212"}
+details p,.print-only p{color:var(--ink2);font-size:14px;margin:10px 0 0;max-width:42em}
+.source{color:var(--ink3)}
+.dims{display:flex;flex-wrap:wrap;gap:6px 28px;margin:12px 0 0}
+.dims div{display:flex;gap:8px}.dims dd{margin:0;font-size:13px;color:var(--ink)}.dims dt{font-size:13px}
+.patterns{margin-top:12px}
+.pattern{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--line);break-inside:avoid}
+.pattern b{font-weight:300;font-size:28px;line-height:1}
+.pattern h4{margin:0;font-size:15px;font-weight:500}
+.pattern p{margin:2px 0 0;color:var(--ink2);font-size:14px}
+.angle{font-weight:400;font-size:22px;line-height:1.4;letter-spacing:-.02em;margin:10px 0 22px;max-width:30em}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;border-top:1px solid var(--line);padding-top:20px;margin:0}
+.steps dd{margin:4px 0 0;font-size:14px;color:var(--ink2)}
+.limits{margin:10px 0 0;padding:0;list-style:none}
+.limits li{padding:10px 0;border-top:1px solid var(--line);color:var(--ink2);font-size:14px}
+.print-only{display:none}
+.empty{color:var(--ink3);font-size:14px;padding:18px 0;margin:0}
+footer{margin-top:56px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink3);font-size:12px}
+@media screen and (max-width:760px){.sheet{margin:0;border-radius:0;box-shadow:none;padding:40px 22px}.facts,.steps{grid-template-columns:1fr 1fr;gap:16px}.kv{grid-template-columns:1fr;gap:2px}.kv dd{margin-bottom:10px}.top .big{font-size:48px}}
+@page{margin:14mm}
+@media print{
+  :root{--bg:#fff;--sheet:#fff;--ink:#111;--ink2:#444;--ink3:#777;--line:#e2e2de;--tint:#f4f3ef;--accent:#2f5d50;--link-line:#bbb;--shadow:none}
+  body{background:#fff;font-size:12.5px}
+  .sheet{margin:0;max-width:none;padding:0;border-radius:0;box-shadow:none;zoom:.92}
+  section.block{margin-top:40px}
+  .top,.opener,.pattern,.steps{break-inside:avoid}
+  .eyebrow,h2.section,.note{break-after:avoid}
+  .screen-only{display:none}.print-only{display:block;margin-top:10px}
+  .prospect{padding:20px 0}
+  .signal{font-size:14px;margin:10px 0 12px}
+  .kv{gap:4px 20px}.kv dt,.kv dd{font-size:12px}
+  .opener{padding:10px 14px;margin-top:12px;border-radius:10px}
+  details{margin-top:10px}details p,.print-only p{font-size:12px;margin-top:6px}
+  .score b{font-size:24px}
+  .opener{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+"""
+
 
 
 def build_html(data: dict[str, Any]) -> str:
@@ -138,7 +217,16 @@ def build_html(data: dict[str, Any]) -> str:
     average = round(sum(scores) / len(scores)) if scores else 0
     high_intent = sum(1 for p in prospects if "high" in str(p.get("stage", "")).lower())
     top = max(prospects, key=lambda p: clamp(p.get("score")), default={})
-    top_source = as_dict(top.get("source"))
+    top_name = top.get("name") or f"Prospect {prospects.index(top) + 1}" if top else ""
+    meta = ' <span aria-hidden="true">&middot;</span> '.join(
+        esc(part)
+        for part in (
+            "First Customer Finder",
+            data.get("generated_at"),
+            f"{str(data.get('mode') or 'standard').capitalize()} mode",
+        )
+        if part
+    )
 
     prospect_html = "".join(render_prospect(p, i) for i, p in enumerate(prospects, 1))
     pattern_html = "".join(render_pattern(p) for p in patterns)
@@ -147,9 +235,22 @@ def build_html(data: dict[str, Any]) -> str:
         f'<div><dt>{esc(label)}</dt><dd>{esc(plan.get(key, ""))}</dd></div>'
         for key, label in (
             ("first_step", "First step"),
-            ("follow_up", "Follow-up"),
+            ("follow_up", "Follow up"),
             ("success", "Success signal"),
         )
+    )
+    top_html = (
+        f"""
+  <section class="top">
+    <div>
+      <p class="eyebrow">Highest confidence prospect</p>
+      <h2>{esc(top_name)}</h2>
+      <p>{esc(top.get('why_now', top.get('signal', '')))}</p>
+    </div>
+    <div class="big num">{clamp(top.get('score'))}</div>
+  </section>"""
+        if top
+        else ""
     )
 
     return f"""<!doctype html>
@@ -159,113 +260,55 @@ def build_html(data: dict[str, Any]) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{esc(data.get('title', 'First Customer Finder'))}</title>
-<style>
-  :root{{--paper:#faf7f2;--card:#ffffff;--ink:#1c1917;--muted:#6f675e;--line:#e4ddd2;--accent:#c2410c;--accent-soft:#fff1e7;--good:#166534;--radius:14px}}
-  @media(prefers-color-scheme:dark){{:root{{--paper:#151312;--card:#1e1b19;--ink:#efeae3;--muted:#a39a8f;--line:#332e29;--accent:#fb923c;--accent-soft:#2b2019;--good:#4ade80}}}}
-  *{{box-sizing:border-box}}
-  body{{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",sans-serif}}
-  .wrap{{max-width:960px;margin:0 auto;padding:0 24px 64px}}
-  a{{color:var(--accent)}}
-  header.masthead{{padding:56px 0 32px;border-bottom:2px solid var(--ink)}}
-  .kicker{{font:700 12px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}}
-  h1{{font-size:clamp(34px,6vw,58px);line-height:1.04;letter-spacing:-.03em;margin:14px 0 18px}}
-  .verdict{{font-size:clamp(17px,2.2vw,21px);max-width:52em;margin:0}}
-  .facts-row{{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin:28px 0 48px}}
-  .facts-row>div{{background:var(--card);padding:14px 16px}}
-  .facts-row dt,dt{{font:700 10px/1.4 ui-monospace,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}}
-  .facts-row dd,dd{{margin:4px 0 0;font-weight:600;font-size:15px}}
-  .top-pick{{display:flex;gap:20px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--radius);padding:20px 24px;margin-bottom:48px}}
-  .top-pick h2{{margin:6px 0 4px;font-size:26px;letter-spacing:-.02em}}
-  .top-pick p{{margin:0;color:var(--muted)}}
-  .top-pick strong.big{{font-size:44px;letter-spacing:-.04em;color:var(--accent)}}
-  h2.section{{font-size:clamp(24px,3.4vw,34px);letter-spacing:-.025em;border-bottom:1px solid var(--line);padding-bottom:10px;margin:56px 0 8px}}
-  .section-note{{color:var(--muted);margin:0 0 24px}}
-  .prospect{{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:16px;break-inside:avoid}}
-  .prospect header{{display:grid;grid-template-columns:44px 1fr 150px;gap:14px;align-items:start}}
-  .index{{font:800 20px ui-monospace,monospace;color:var(--accent);padding-top:4px}}
-  .who small{{font:700 10px/1 ui-monospace,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}}
-  .who h3{{margin:4px 0 8px;font-size:22px;letter-spacing:-.02em}}
-  .stage{{display:inline-block;font:700 11px/1 ui-monospace,monospace;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted)}}
-  .stage-high{{color:var(--accent);border-color:var(--accent)}}
-  .stage-warm{{color:var(--good);border-color:var(--good)}}
-  .fit{{text-align:right}}
-  .fit strong{{font-size:30px;letter-spacing:-.03em}}
-  .fit small{{display:block;color:var(--muted);margin-top:4px}}
-  .fit-bar{{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:6px}}
-  .fit-bar i,.bar i{{display:block;height:100%;background:var(--accent)}}
-  .signal{{font-size:17px;border-left:3px solid var(--accent);padding:10px 16px;background:var(--accent-soft);margin:18px 0 14px}}
-  dl.facts{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}}
-  dl.facts>div{{border:1px solid var(--line);border-radius:10px;padding:12px 14px}}
-  .opener{{border:1px dashed var(--accent);border-radius:10px;padding:12px 16px;margin-top:12px}}
-  .opener p{{margin:6px 0 0;font-style:italic}}
-  details{{margin-top:12px}}
-  summary{{cursor:pointer;font-weight:700;color:var(--accent)}}
-  .source{{color:var(--muted);font-size:14px}}
-  .dims{{display:grid;gap:6px;margin-top:10px}}
-  .dim{{display:grid;grid-template-columns:130px 1fr 40px;gap:12px;align-items:center;font-size:13px}}
-  .dim .bar{{height:6px;background:var(--line);border-radius:6px;overflow:hidden}}
-  .patterns{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
-  .pattern{{display:flex;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}}
-  .pattern strong{{font-size:26px;color:var(--accent);letter-spacing:-.03em}}
-  .pattern h3{{margin:0 0 4px;font-size:17px}}
-  .pattern p{{margin:0;color:var(--muted);font-size:14px}}
-  .plan{{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}}
-  .plan .angle{{font-size:21px;font-weight:700;letter-spacing:-.015em;margin:4px 0 18px}}
-  .plan-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}
-  .plan-grid>div{{border:1px solid var(--line);border-radius:10px;padding:12px 14px}}
-  .limits{{border:1px solid var(--line);border-radius:var(--radius);padding:8px 24px;color:var(--muted)}}
-  footer{{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:13px}}
-  @media(max-width:720px){{.facts-row{{grid-template-columns:1fr 1fr}}.prospect header{{grid-template-columns:32px 1fr}}.fit{{grid-column:1/-1;text-align:left}}dl.facts,.patterns,.plan-grid{{grid-template-columns:1fr}}}}
-  @media print{{body{{background:#fff}}.prospect,.pattern,.plan{{border-color:#ccc}}details{{open:true}}}}
-</style>
+<style>{CSS}</style>
 </head>
 <body>
-<div class="wrap">
-  <header class="masthead">
-    <span class="kicker">First customer finder · {esc(data.get('generated_at', ''))} · {esc(data.get('mode', 'standard'))} mode</span>
+<main class="sheet">
+  <header>
+    <p class="meta">{meta}</p>
     <h1>{esc(data.get('title', 'First Customer Finder'))}</h1>
     <p class="verdict">{esc(data.get('verdict', 'No verdict supplied.'))}</p>
   </header>
 
-  <dl class="facts-row">
+  <dl class="facts">
     <div><dt>Product</dt><dd><a href="{safe_url(data.get('product_url'))}" target="_blank" rel="noreferrer">{esc(data.get('product', 'Not specified'))}</a></dd></div>
     <div><dt>Target customer</dt><dd>{esc(data.get('target_customer', 'Not specified'))}</dd></div>
-    <div><dt>Qualified prospects</dt><dd>{len(prospects)} ({high_intent} high intent)</dd></div>
-    <div><dt>Average fit score</dt><dd>{average}/100</dd></div>
+    <div><dt>Qualified prospects</dt><dd class="num">{len(prospects)} <span class="sub">({high_intent} high intent)</span></dd></div>
+    <div><dt>Average fit score</dt><dd class="num">{average} of 100</dd></div>
   </dl>
-
-  <section class="top-pick">
-    <div>
-      <span class="kicker">Highest-confidence prospect</span>
-      <h2>{esc(top.get('name', 'No qualified prospect'))}</h2>
-      <p>{esc(top.get('why_now', top.get('signal', '')))}</p>
-    </div>
-    <strong class="big">{clamp(top.get('score'))}</strong>
+{top_html}
+  <section class="block">
+    <p class="eyebrow">Shortlist</p>
+    <h2 class="section">Prospects with a reason to care now</h2>
+    <p class="note">Every entry is tied to a verified public signal. Open the evidence before considering outreach. Scope: {esc(data.get('search_scope', 'not specified'))}.</p>
+    {prospect_html or '<p class="empty">No qualified prospects supplied.</p>'}
   </section>
 
-  <h2 class="section">Prospects with a reason to care now</h2>
-  <p class="section-note">Every entry is tied to a verified public signal — open the evidence before considering outreach. Scope: {esc(data.get('search_scope', 'not specified'))}.</p>
-  {prospect_html or '<p>No qualified prospects supplied.</p>'}
+  <section class="block">
+    <p class="eyebrow">Patterns</p>
+    <h2 class="section">Signals that repeat</h2>
+    <p class="note">Recurring pains and triggers across prospects. These are your strongest positioning and outreach angles.</p>
+    <div class="patterns">{pattern_html or '<p class="empty">No repeated patterns supplied.</p>'}</div>
+  </section>
 
-  <h2 class="section">Signals that repeat</h2>
-  <p class="section-note">Recurring pains and triggers across prospects — your strongest positioning and outreach angles.</p>
-  <div class="patterns">{pattern_html or '<p>No repeated patterns supplied.</p>'}</div>
-
-  <h2 class="section">Seven-day manual validation plan</h2>
-  <div class="plan">
-    <span class="kicker">Angle</span>
+  <section class="block">
+    <p class="eyebrow">Next seven days</p>
+    <h2 class="section">Manual validation plan</h2>
     <p class="angle">{esc(plan.get('angle', 'Validate the pain before pitching the product.'))}</p>
-    <div class="plan-grid">{plan_html}</div>
-  </div>
+    <dl class="steps">{plan_html}</dl>
+  </section>
 
-  <h2 class="section">Read this before acting</h2>
-  <ul class="limits">{limits_html or '<li>Potential customers inferred from public signals, not confirmed buyers.</li>'}</ul>
+  <section class="block">
+    <p class="eyebrow">Limits</p>
+    <h2 class="section">Read this before acting</h2>
+    <ul class="limits">{limits_html or '<li>Potential customers inferred from public signals, not confirmed buyers.</li>'}</ul>
+  </section>
 
   <footer>
     <span>Generated by the first-customer-finder skill</span>
-    <span>Public signals only · outreach is never sent automatically</span>
+    <span>Public signals only. Outreach is never sent automatically.</span>
   </footer>
-</div>
+</main>
 </body>
 </html>"""
 

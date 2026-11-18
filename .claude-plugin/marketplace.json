@@ -1,6 +1,6 @@
 {
   "name": "carolinacherry",
-  "description": "Skills by Daniel An — startup research and go-to-market tools for Claude.",
+  "description": "Skills by Daniel An: startup research and go-to-market tools for Claude.",
   "owner": {
     "name": "Daniel An"
   },
@@ -8,7 +8,7 @@
     {
       "name": "first-customer-finder",
       "source": "./",
-      "description": "Find and qualify evidence-backed potential first customers for a startup from recent public signals — ICP analysis, verified pain/buying signals, scored shortlist, drafted outreach openers, and a polished HTML report. Never sends messages."
+      "description": "Find and qualify evidence-backed potential first customers for a startup from recent public signals: ICP analysis, verified pain/buying signals, scored shortlist, drafted outreach openers, and a polished HTML report. Never sends messages."
     }
   ]
 }
