@@ -1,6 +1,6 @@
 {
   "name": "claude-first-customer-finder-skill",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Claude Code skill that finds evidence-backed potential first customers for a startup from recent public signals.",
   "license": "MIT",
   "author": "Daniel An",
